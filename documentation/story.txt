@@ -1,0 +1,56 @@
+Story API description
+=====================
+
+The Story API will enable clients to read, write, and update the contents of a storyline provided that 
+all appropriate credentials are present.
+
+All functions will have roughly the same format:
+    
+    /sessionid/(arguments)
+    HTTP request type: functionname
+    
+GET
+===
+
+With no arguments:
+    Returns:
+        A JSON message containing a list of all storyline names and (possibly) descriptions.
+
+With a storyline name as its only argument (ie. /sessionid/somestoryline):
+    Returns:
+        A JSON message enumerating all of the nodes contained within the selected story.
+
+With a storyline name and node as its arguments (ie. /sessionid/somestoryline/node1)
+    Returns:
+        A JSON message containing the contents of that specific node.
+
+With a storyline name, node, and some specific node attribute as its arguments (ie. /sessionid/somestoryline/node1/text)
+    Returns:
+        A JSON message containing the requested value.
+        
+PUT
+===
+
+With no arguments:
+    Returns:
+        An HTTP error message.
+
+With a storyline name as its only argument (ie. /sessionid/somestoryline):
+    Creates a new storyline on the server with the given name.
+    
+    Returns:
+        A JSON message with the story line title on success or an error message on failure.
+        
+With a storyline name, node name, and node contents as its arguments (ie. /sessionid/somestoryline/node2/text=foo;dest1=bar)
+    Creates a new story node with the given elements.
+    If the node already exists, overwrites all specified fields.
+    
+    Returns:
+        A JSON message containing the contents of the node specified.
+        
+With a storyline name, node name, and destination name as its arguments (ie. /sessionid/somestoryline/node2/node1/response=stuff;prob=50)
+    Creates a new destination in the specified story node.
+    If the destination already exists, overwrites all specified fields.
+    
+    Returns:
+        A JSON message containing the contents of the destination specified.

@@ -1,0 +1,42 @@
+user API description
+=====================
+
+This API exists to allow users to be associated with unique session identifiers.
+These session identifiers are, in turn, used to access, update, and modify storylines
+on the server.
+
+Each function is to be encoded in the following format:
+    /functionname/arguments
+
+when called remotely.
+
+Arguments should be separated by semicolons.
+
+login
+=====
+Creates a user session given the credentials provided.
+
+Arguments: User ID, password.
+Assumptions: That some form of encryptino is used so that passwords are not sent in plain text over a network.
+             The password could be passed through some fairly simple cypher first to visually obfuscate it.
+         
+Returns:
+    On success:
+        A json message containing a session id hash and other relevant information.
+        
+    On failure:
+        A(n?) HTTP error message.
+        
+logout
+======
+Deletes the given user session.
+
+Arguments: User session hash
+Assumptions: That it is safe to delete any given session regardless of its creator.
+
+Returns:
+    On success:
+        A json message containing the session id deleted.
+    
+    On failure:
+        An HTTP error message.

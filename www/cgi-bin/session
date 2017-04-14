@@ -1,0 +1,114 @@
+#!/usr/bin/python
+
+# session - Script to create and delete login information for 
+# a Nudge editing session. 
+# 2017 Dowell Lab
+
+# Uses code snippets and functions previously written for the q project (https://github.com/Kyle-Helmick/q),
+# developed by Michael Gohde for the project.
+
+import os
+import sys
+import MySQLdb
+
+# A quick function to convert a python dictionary to 
+# a json class. 
+def gen_json(dat_dict):
+    print "{"
+    vals=list(dat_dict)
+    for i in range(0, len(vals)):
+        if i!=0:
+            sys.stdout.write(',\n')
+        sys.stdout.write('    "%s": "%s"' % (vals[i], str(dat_dict[vals[i]])))
+    print ""
+    print "}"
+    
+def termquery(query):
+    while len(query.fetch_row())!=0:
+        pass
+    
+# Generates and prints out an HTTP header for server output.
+def printheader():
+    print("Content-Type: application/json;charset=utf-8")
+    print('')
+    
+def printerror(errortext):
+    print(errortext)
+    print()
+
+dbusername='nudgeweb'
+dbpassword='radpassword'
+
+def do_login(username, password):
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+    db.query("SELECT * FROM users WHERE username='%s' AND password=PASSWORD('%s')" % (username, password))
+    query=db.use_result()
+    r=None
+    
+    try:
+        # This means that we're good to go.
+        r=query.fetch_row()[0]
+        termquery(query)
+        
+    except:
+        # If we're here, then the user wasn't found.
+        generror('Status:400')
+        return
+    
+    if len(r)!=0:
+        db.query("INSERT INTO sessions (userid, username) VALUES (%s, '%s')" % (str(r[0]), r[1]))
+        db.commit()
+        
+        db.query("SELECT sessionid FROM sessions WHERE userid=%s" % str(r[0]))
+        query=db.use_result()
+        r=query.fetch_row()[0]
+        termquery(query)
+        
+        printheader()
+        gen_json({'sessionid':r[0]})
+    else:
+        generror('Status:400')
+        
+    db.close()
+
+
+def do_logout(sessionid):
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+    db.query('DELETE FROM sessions WHERE sessionid=%s' % sessionid)
+    db.commit()
+    db.close()
+    
+    printheader()
+    gen_json({'sessionid':sessionid})
+
+
+# Dispatcher code:
+def main(reqmethod, rsrc):
+    sys.stderr=sys.stdout
+    # Start dispatching stuff:
+    if rsrc is not None:
+        reqchunks=rsrc.split('/')[1:]
+
+        if len(reqchunks)==1 and reqmethod=="DELETE":
+            do_logout(reqchunks[0])
+            
+        elif len(reqchunks)==2:
+            do_login(reqchunks[0], reqchunks[1])
+                
+        else:
+            generror("Status:400")
+            return
+
+    else:
+        generror("Status:400")
+
+rmethod="GET"
+rsrc=None
+
+try:
+    rmethod=os.environ['REQUEST_METHOD']
+    rsrc=os.environ['PATH_INFO']
+except:
+    pass
+
+main(rmethod, rsrc)

@@ -1,0 +1,118 @@
+#!/usr/bin/python
+
+# user -- A script to generate or delete user accounts on a nudge editing server.
+# 2017 Dowell Lab
+
+# This uses code snippets and functions previously written for the q project (https://github.com/Kyle-Helmick/q),
+# developed by Michael Gohde for the project.
+
+import os
+import sys
+import MySQLdb
+
+# A quick function to convert a python dictionary to 
+# a json class. 
+def gen_json(dat_dict):
+    print "{"
+    vals=list(dat_dict)
+    for i in range(0, len(vals)):
+        if i!=0:
+            sys.stdout.write(',\n')
+        sys.stdout.write('    "%s": "%s"' % (vals[i], str(dat_dict[vals[i]])))
+    print ""
+    print "}"
+    
+def termquery(query):
+    while len(query.fetch_row())!=0:
+        pass
+    
+# Generates and prints out an HTTP header for server output.
+def printheader():
+    print("Content-Type: application/json;charset=utf-8")
+    print('')
+    
+def printerror(errortext):
+    print(errortext)
+    print()
+
+dbusername='nudgeweb'
+dbpassword='radpassword'
+
+def create_user(username, password):
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+
+    try:
+        db.query("INSERT INTO users (username, password, lastlogin) VALUES (%s, PASSWORD('%s'), NOW())" % (username, password))
+        db.commit()
+        
+        db.query("SELECT * FROM users WHERE username='%s'" % (username))
+        query=db.use_result()
+        
+        r=query.fetch_row()[0]
+        userid=r[0]
+        
+        printheader()
+        gen_json({'userid':userid})
+    except:
+        generror('Status:400')
+        print('It appears that the requested username already exists on the system.')
+    
+    db.close()
+
+
+def delete_user(username, password):
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+    # Start by invalidating all sessions owned by that user:
+    db.query("SELECT userid FROM users WHERE username='%s' AND password=PASSWORD('%s')" %  (username, password))
+    query=db.use_result()
+    
+    try:
+        r=query.fetch_row()[0]
+        
+        userid=str(r[0])
+        
+        db.query("DELETE FROM sessions WHERE userid=%s" % userid)
+        db.commit()
+        
+        #Since we've already checked the given username and password:
+        db.query("DELETE FROM users WHERE userid=%s" % userid)
+        db.commit()
+        
+        printheader()
+        gen_json({'userid':userid})
+    except:
+        generror('Status:400')
+        print('Could not delete user account due to invalid credentials')
+    db.close()
+    
+
+# Dispatcher code:
+def main(reqmethod, rsrc):
+    sys.stderr=sys.stdout
+    # Start dispatching stuff:
+    if rsrc is not None:
+        reqchunks=rsrc.split('/')[1:]
+
+        if len(reqchunks)==1 and reqmethod=="DELETE":
+            do_logout(reqchunks[0])
+            
+        elif len(reqchunks)==2:
+            do_login(reqchunks[0], reqchunks[1])
+                
+        else:
+            generror("Status:400")
+            return
+
+    else:
+        generror("Status:400")
+
+rmethod="GET"
+rsrc=None
+
+try:
+    rmethod=os.environ['REQUEST_METHOD']
+    rsrc=os.environ['PATH_INFO']
+except:
+    pass
+
+main(rmethod, rsrc)

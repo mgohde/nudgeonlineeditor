@@ -1,0 +1,19 @@
+What is the Nudge web editor project? 
+=====================================
+
+The Nudge Web Editor is a project designed to integrate an online storyline editor into
+the Nudge project. This is a beneficial development for the following reasons:
+    
+    1. The existing standalone Java editor requires a user to have Java installed.
+    2. The existing editor requires specific knowledge of the Nudge database to work.
+    3. The editor's online collaboration toolset still requires an active login framework.
+    4. It would be useful to make storylines accessible from anywhere.
+    
+How will the API be structured?
+===============================
+
+The API will be modeled following a modified RESTful framework. It will be comprised of 
+
+    1. session -- Handles user session creation/deletion.
+    2. story -- Used to set/retrieve story node information.
+    3. account -- Creates/deletes user accounts.
