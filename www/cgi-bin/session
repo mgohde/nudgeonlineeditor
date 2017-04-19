@@ -52,7 +52,7 @@ def do_login(username, password):
         
     except:
         # If we're here, then the user wasn't found.
-        generror('Status:400')
+        printerror('Status:400')
         return
     
     if len(r)!=0:
@@ -67,7 +67,7 @@ def do_login(username, password):
         printheader()
         gen_json({'sessionid':r[0]})
     else:
-        generror('Status:400')
+        printerror('Status:400')
         
     db.close()
 
@@ -96,11 +96,11 @@ def main(reqmethod, rsrc):
             do_login(reqchunks[0], reqchunks[1])
                 
         else:
-            generror("Status:400")
+            printerror("Status:400")
             return
 
     else:
-        generror("Status:400")
+        printerror("Status:400")
 
 rmethod="GET"
 rsrc=None

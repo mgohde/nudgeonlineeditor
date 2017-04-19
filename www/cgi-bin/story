@@ -33,7 +33,7 @@ def printheader():
     
 def printerror(errortext):
     print(errortext)
-    print()
+    print('')
 
 dbusername='nudgeweb'
 dbpassword='radpassword'
@@ -54,7 +54,7 @@ def create_user(username, password):
         printheader()
         gen_json({'userid':userid})
     except:
-        generror('Status:400')
+        printerror('Status:400')
         print('It appears that the requested username already exists on the system.')
     
     db.close()
@@ -81,22 +81,57 @@ def delete_user(username, password):
         printheader()
         gen_json({'userid':userid})
     except:
-        generror('Status:400')
+        printerror('Status:400')
         print('Could not delete user account due to invalid credentials')
     db.close()
     
 
+def authenticate_user(sessionid, storyline, db):
+    db.query("SELECT userid, groupid FROM sessions WHERE sessionid=%s" % sessionid)
+    query=db.use_result()
+    
+    w=query.fetch_row()
+    if len(w)==0:
+        return False
+    
+    userid=w[0][0]
+    groupid=w[0][1]
+    
+    db.query("SELECT storyid FROM stories WHERE authorid=%s OR groupid=%s" % (userid, groupid))
+    query=db.use_result()
+    
+    w=query.fetch_row()
+    if len(w)==0:
+        return False
+    
+    return w[0][0]==storyline
+
+
+def get_story_id(sessionid, storyline, db):
+    db.query("SELECT storyid FROM stories WHERE name='%s'" % storyline)
+    query=db.use_result()
+    
+    w=query.fetch_row()
+    if len(w)==0:
+        return -1
+    else:
+        return w[0][0]
+
+    
 def get_stories():
     db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
     
-    db.query("SELECT * FROM stories")
+    db.query("SELECT name FROM stories")
     query=db.use_result()
     
     try:
         storynames=[]
         # TODO: Fix this godawful loop setup
         while True:
-            r=query.fetch_row()[0]
+            w=query.fetch_row()
+            if len(w)==0:
+                break
+            r=w[0] #query.fetch_row()[0]
             if r is None:
                 break
             elif len(r)==0:
@@ -104,17 +139,46 @@ def get_stories():
             
             storynames.append(r[0])
         
-        print('{"storylist":[')
+        printheader()
+        if len(storynames)==0:
+            print('{"storylist":[]}')
         
-        for s in storynames[1:]:
-            print('\t{"storyname":"%s"},')
+        else:
+            print('{"storylist":[')
+            
+            print('\t{"storyname":"%s"}\n' % storynames[0])
+            
+            for s in storynames[1:]:
+                print('\t,{"storyname":"%s"}\n' % s)
+                
+            print(']}')
+    except:
+        printerror('Status:500')
+        print('Could not read available story list.')
+
+def get_story_nodes(sessionid, storyline):
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+
+    if not authenticate_user(sessionid, storyline, db):
+        generror('Status:403')
+        print('Session has insufficient permissions for requested storyline.')
+        return
+    
+    # Get the story id:
+    storyid=get_story_id(sessionid, storylinem, db)
+    
+    # Now get the nodes:
+    try:
+        storynodes=[]
+        
+        # Once again, it would be useful to have a better loop setup:
+        while True:
+            pass
     except:
         pass
 
-def get_story_nodes(storyline):
-    pass
 
-def get_story_node_contents(storyline, node):
+def get_story_node_contents(sessionid, storyline, node):
     pass
 
 def get_story_node_element(storyline, node, element):
@@ -135,19 +199,26 @@ def main(reqmethod, rsrc):
     # Start dispatching stuff:
     if rsrc is not None:
         reqchunks=rsrc.split('/')[1:]
-
-        if len(reqchunks)==1 and reqmethod=="DELETE":
-            do_logout(reqchunks[0])
-            
-        elif len(reqchunks)==2:
-            do_login(reqchunks[0], reqchunks[1])
+        
+        if reqmethod=="GET":
+            if len(reqchunks)==1:
+                # TODO: Consider adding some form of authentication by session ID.
+                get_stories()
+        
+            elif len(reqchunks)==2:
+                get_story_nodes(reqchunks[0], reqchunks[1])
                 
-        else:
-            generror("Status:400")
-            return
+            elif len(reqchunks==3):
+                get_story_node_contents(reqchunks[0], reqchunks[1], reqchunks[2])
+                
+            elif len(reqchunks==4):
+                get_story_node_element(reqchunks[0], reqchunks[1], reqchunks[2], reqchunks[3])
+        
+        elif reqmethod=="PUT":
+            pass
 
     else:
-        generror("Status:400")
+        printerror("Status:400")
 
 rmethod="GET"
 rsrc=None

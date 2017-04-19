@@ -54,7 +54,7 @@ def create_user(username, password):
         printheader()
         gen_json({'userid':userid})
     except:
-        generror('Status:400')
+        printerror('Status:400')
         print('It appears that the requested username already exists on the system.')
     
     db.close()
@@ -81,7 +81,7 @@ def delete_user(username, password):
         printheader()
         gen_json({'userid':userid})
     except:
-        generror('Status:400')
+        printerror('Status:400')
         print('Could not delete user account due to invalid credentials')
     db.close()
     
@@ -94,17 +94,17 @@ def main(reqmethod, rsrc):
         reqchunks=rsrc.split('/')[1:]
 
         if len(reqchunks)==1 and reqmethod=="DELETE":
-            do_logout(reqchunks[0])
+            delete_user(reqchunks[0])
             
         elif len(reqchunks)==2:
-            do_login(reqchunks[0], reqchunks[1])
+            create_user(reqchunks[0], reqchunks[1])
                 
         else:
-            generror("Status:400")
+            printerror("Status:400")
             return
 
     else:
-        generror("Status:400")
+        printerror("Status:400")
 
 rmethod="GET"
 rsrc=None
