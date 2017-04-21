@@ -37,53 +37,6 @@ def printerror(errortext):
 
 dbusername='nudgeweb'
 dbpassword='radpassword'
-
-def create_user(username, password):
-    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
-
-    try:
-        db.query("INSERT INTO users (username, password, lastlogin) VALUES (%s, PASSWORD('%s'), NOW())" % (username, password))
-        db.commit()
-        
-        db.query("SELECT * FROM users WHERE username='%s'" % (username))
-        query=db.use_result()
-        
-        r=query.fetch_row()[0]
-        userid=r[0]
-        
-        printheader()
-        gen_json({'userid':userid})
-    except:
-        printerror('Status:400')
-        print('It appears that the requested username already exists on the system.')
-    
-    db.close()
-
-
-def delete_user(username, password):
-    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
-    # Start by invalidating all sessions owned by that user:
-    db.query("SELECT userid FROM users WHERE username='%s' AND password=PASSWORD('%s')" %  (username, password))
-    query=db.use_result()
-    
-    try:
-        r=query.fetch_row()[0]
-        
-        userid=str(r[0])
-        
-        db.query("DELETE FROM sessions WHERE userid=%s" % userid)
-        db.commit()
-        
-        #Since we've already checked the given username and password:
-        db.query("DELETE FROM users WHERE userid=%s" % userid)
-        db.commit()
-        
-        printheader()
-        gen_json({'userid':userid})
-    except:
-        printerror('Status:400')
-        print('Could not delete user account due to invalid credentials')
-    db.close()
     
 
 def authenticate_user(sessionid, storyline, db):
@@ -161,6 +114,9 @@ def get_stories():
     except:
         printerror('Status:500')
         print('Could not read available story list.')
+    
+    db.close()
+
 
 def get_story_nodes(sessionid, storyline):
     db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
@@ -199,19 +155,92 @@ def get_story_nodes(sessionid, storyline):
             print("{}")
         
         else:
-            print('{ "contents": [')
+            print('{"contents": [')
             print('{"nodename":"%s", "nodeid":"%s"}' % (storynodes[0][0], str(storynodes[0][1])))
             for elem in storynodes[1:]:
                 print(',{"nodename":"%s", "nodeid":"%s"}' % (elem[0], str(elem[1])))
             
             print("]}")
     except:
-        printerror('Status:oh shit!')
+        printerror('Status:come up with a compelling status code.')
         print("Unable to service request due to a logic or database configuration fault.")
+    
+    db.close()
 
 
 def get_story_node_contents(sessionid, storyline, node):
-    pass
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+
+    if not authenticate_user(sessionid, storyline, db):
+        printerror('Status:403')
+        print('Session has insufficient permissions for requested storyline.')
+        return
+    
+    # Get the story id:
+    storyid=get_story_id(sessionid, storyline, db)
+    
+    # Now get the specified node's contents:
+    #try:
+    nodecontents={}
+    db.query("SELECT nodeid, name, content FROM nodes WHERE storyid=%s AND name='%s'" % (str(storyid), node))
+    query=db.use_result()
+    
+    # There _should_ only be one element with this specific set of attributes.
+    # TODO: Add code to check for duplicate nodes and throw errors, etc as necessary.
+    w=query.fetch_row()
+    
+    # Note: if an exception is raised, 
+    nodecontents={'nodeid':w[0][0], 'nodename':w[0][1], 'content':w[0][2]}
+    
+    query.fetch_row()
+    
+    # Now that we have all of the appropriate node contents, 
+    # attempt to fetch all responses:
+    resplist=[]
+    db.query("SELECT respid, content FROM responses WHERE nodeid=%s" % str(nodecontents['nodeid']))
+    query=db.use_result()
+    
+    w=query.fetch_row()
+    while len(w)!=0:
+        resplist.append([w[0][0], w[0][1], []])
+        w=query.fetch_row()
+    
+    # All responses should be secured, to it's now necessary to 
+    # associate each response with a specific destination.
+    for r in resplist:
+        db.query("SELECT dest, weight, rewardid FROM destinations WHERE respid=%d" % r[0])
+        query=db.use_result()
+        
+        w=query.fetch_row()
+        while len(w)!=0:
+            tmparr=[w[0][0], w[0][1], w[0][2]]
+            r[2].append(tmparr)
+            w=query.fetch_row()
+            
+    # Start printing the output:
+    printheader()
+    print('{"nodeid": %d, "nodename":"%s", "text":"%s", "destinations":[' % (nodecontents['nodeid'], nodecontents['nodename'], nodecontents['content']))
+    
+    # Make some attempt to print out the contents of the destinations vector:
+    for r in resplist:
+        if r is not resplist[0]:
+            print(',')
+        print('{"respid":%d, "content":"%s", "destinations":[' % (r[0], r[1]))
+        for d in r[2]:
+            if d is not r[2][0]:
+                print(',')
+            print('{"dest":"%s", "weight":%s, "rewardid":%s}' % (d[0], d[1], d[2]))
+            
+        print(']}')
+    
+    print(']}')
+            
+    #except:
+    #    printerror('Status:compelling status code.')
+    #    print("Unable to service request due to a logic or database configuration fault.")
+    
+    db.close()
+
 
 def get_story_node_element(storyline, node, element):
     pass
@@ -240,10 +269,10 @@ def main(reqmethod, rsrc):
             elif len(reqchunks)==2:
                 get_story_nodes(reqchunks[0], reqchunks[1])
                 
-            elif len(reqchunks==3):
+            elif len(reqchunks)==3:
                 get_story_node_contents(reqchunks[0], reqchunks[1], reqchunks[2])
                 
-            elif len(reqchunks==4):
+            elif len(reqchunks)==4:
                 get_story_node_element(reqchunks[0], reqchunks[1], reqchunks[2], reqchunks[3])
         
         elif reqmethod=="PUT":
