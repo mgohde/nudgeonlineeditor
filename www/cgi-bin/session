@@ -41,7 +41,7 @@ dbpassword='radpassword'
 
 def do_login(username, password):
     db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
-    db.query("SELECT * FROM users WHERE username='%s' AND password=PASSWORD('%s')" % (username, password))
+    db.query("SELECT userid, username, groupid FROM users WHERE username='%s' AND password=PASSWORD('%s')" % (username, password))
     query=db.use_result()
     r=None
     
@@ -56,7 +56,7 @@ def do_login(username, password):
         return
     
     if len(r)!=0:
-        db.query("INSERT INTO sessions (userid, username) VALUES (%s, '%s')" % (str(r[0]), r[1]))
+        db.query("INSERT INTO sessions (userid, username, groupid) VALUES (%s, '%s', %s)" % (str(r[0]), r[1], str(r[2])))
         db.commit()
         
         db.query("SELECT sessionid FROM sessions WHERE userid=%s" % str(r[0]))

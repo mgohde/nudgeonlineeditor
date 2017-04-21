@@ -92,19 +92,25 @@ def authenticate_user(sessionid, storyline, db):
     
     w=query.fetch_row()
     if len(w)==0:
+        print "w=0"
         return False
     
     userid=w[0][0]
     groupid=w[0][1]
     
-    db.query("SELECT storyid FROM stories WHERE authorid=%s OR groupid=%s" % (userid, groupid))
+    w=query.fetch_row()
+    db.query("SELECT name FROM stories WHERE authorid=%s OR groupid=%s" % (userid, groupid))
     query=db.use_result()
     
+    resultfound=False
     w=query.fetch_row()
-    if len(w)==0:
-        return False
-    
-    return w[0][0]==storyline
+    while len(w)!=0:
+        if w[0][0]==storyline:
+            resultfound=True
+        
+        w=query.fetch_row()
+        
+    return resultfound;
 
 
 def get_story_id(sessionid, storyline, db):
@@ -160,22 +166,48 @@ def get_story_nodes(sessionid, storyline):
     db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
 
     if not authenticate_user(sessionid, storyline, db):
-        generror('Status:403')
+        printerror('Status:403')
         print('Session has insufficient permissions for requested storyline.')
         return
     
     # Get the story id:
-    storyid=get_story_id(sessionid, storylinem, db)
+    storyid=get_story_id(sessionid, storyline, db)
     
     # Now get the nodes:
     try:
         storynodes=[]
+        db.query("SELECT name, nodeid FROM nodes WHERE storyid=%s" % storyid)
+        query=db.use_result()
         
         # Once again, it would be useful to have a better loop setup:
         while True:
-            pass
+            w=query.fetch_row()
+            
+            # Stop the loop 
+            if w is None:
+                break
+            
+            if len(w)==0:
+                break
+            
+            r=w[0]
+            storynodes.append([r[0], r[1]])
+        
+        printheader()
+        
+        if len(storynodes)==0:
+            print("{}")
+        
+        else:
+            print('{ "contents": [')
+            print('{"nodename":"%s", "nodeid":"%s"}' % (storynodes[0][0], str(storynodes[0][1])))
+            for elem in storynodes[1:]:
+                print(',{"nodename":"%s", "nodeid":"%s"}' % (elem[0], str(elem[1])))
+            
+            print("]}")
     except:
-        pass
+        printerror('Status:oh shit!')
+        print("Unable to service request due to a logic or database configuration fault.")
 
 
 def get_story_node_contents(sessionid, storyline, node):
