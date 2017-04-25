@@ -259,10 +259,18 @@ def get_story_node_element(storyline, node, element):
     pass
 
 
+def check_story_exists(db, storyname, userid, groupid):
+    db.query("SELECT storyid FROM stories WHERE name='%s' AND authorid=%d" % (storyname, userid))
+    query=db.use_result()
+    w=query.fetch_row()
+    
+    return not len(w)==0 
+
+
 # Creates a new story for the specified user.
 def create_story(sessionid, storyname):
     db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
-    (userid, groupid)=get_user_info(sessionid)
+    (userid, groupid)=get_user_info(sessionid, db)
     
     if userid==-1 or groupid==-1:
         printerror('Status: Yet another amazing status code.')
@@ -270,23 +278,131 @@ def create_story(sessionid, storyname):
         db.close()
         return
     
-    db.query("INSERT INTO stories (name, authorid, groupid) VALUES ('%s', %d, %d)" % (storyname, userid, groupid))
-    db.commit()
-    db.query("SELECT storyid FROM stories WHERE name='%s' AND authorid=%d AND groupid=%d" (storyname, userid, groupid))
-    query=db.use_result()
-    w=query.fetch_row()
-    storyid=w[0][0]
-    db.close()
-    
-    printheader()
-    print('{"storyid":%d"}' % storyid)
+    try:
+        # TODO: Determine if checking whether a story already exists would be sufficiently worthwhile.
+        db.query("INSERT INTO stories (name, authorid, groupid) VALUES ('%s', %d, %d)" % (storyname, userid, groupid))
+        db.commit()
+        db.query("SELECT storyid FROM stories WHERE name='%s' AND authorid=%d AND groupid=%d" (storyname, userid, groupid))
+        query=db.use_result()
+        w=query.fetch_row()
+        storyid=w[0][0]
+        query.fetch_row()
+        db.close()
+        
+        printheader()
+        print('{"storyid":%d"}' % storyid)
+    except:
+        printerror('Status:500')
+        print("Internal server error")
 
 
 def create_node(sessionid, storyname, nodename, nodecontents):
-    pass
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+    
+    (userid, groupid)=get_user_info(sessionid, db)
+    
+    # Get the story name based on group identification, since every member of a group
+    # should be able to access and update the same stories.
+    try:
+        db.query("SELECT storyid FROM stories WHERE name='%s' AND groupid=%d" % (storyname, groupid))
+        query=db.use_result()
+        w=query.fetch_row()
+        storyid=w[0][0]
+        query.fetch_row()
+        
+        db.query("INSERT INTO nodes (storyid, name, content) VALUES (%d, '%s', '%s')" % (storyid, nodename, nodecontents))
+        db.commit()
+        
+        db.query("SELECT nodeid FROM nodes WHERE storyid=%d AND name='%s'" % (storyid, nodename))
+        query=db.use_result()
+        w=query.fetch_row()
+        if len(w)!=0:
+            printheader()
+            print('{"nodeid":%d"' % w[0][0])
+            
+        # Avoid duplicating code by using a far worse solution:
+        else:
+            raise Exception
+        
+    except:
+        printerror('Status:500')
+        print("Internal server error in method create_node()")
+        
+    db.close()
+    
 
-def create_node_response(sessionidstoryname, nodename, destname, destcontents):
-    pass
+def get_story_id(db, storyname, groupid):
+    db.query("SELECT storyid FROM stories WHERE name='%s' AND groupid=%d" % (storyname, groupid))
+    query=db.use_result()
+    w=query.fetch_row()
+    query.fetch_row()
+    
+    if len(w)!=0:
+        return w[0][0]
+    else:
+        return -1
+
+
+def get_node_id(db, storyid, nodename):
+    db.query("SELECT nodeid FROM nodes WHERE name='%s' AND storyid=%d" % (nodename, storyid))
+    query=db.use_result()
+    w=query.fetch_row()
+    
+    try:
+        nodeid=w[0][0]
+        query.fetch_row() # There should be only one such ID.
+        return nodeid
+    except:
+        return -1
+
+    
+def create_node_response(sessionid, storyname, nodename, destname, destcontents):
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+    (userid, groupid)=get_user_info(sessionid, db)
+    
+    try:
+        storyid=get_story_id(db, storyname, groupid)
+        nodeid=get_node_id(db, storyid, nodename)
+        
+        db.query("INSERT INTO responses (nodeid, storyid, content) VALUES (%d, %d, '%s')" % (nodeid, storyid, destcontents))
+        db.commit()
+        
+        # Now attempt to get the ID of the last inserted node:
+        db.query("SELECT respid FROM responses WHERE nodeid=%d AND storyid=%d" % (nodeid, storyid))
+        query=db.use_result()
+        w=query.fetch_row()
+        respid=w[0][0]
+        
+        db.close()
+        
+        printheader()
+        print('{"respid":%d}' % respid)
+    except:
+        # TODO: Consider coming up with a better status code for this kind of thing.
+        printerror('Status:500')
+        print("Internal server error.")
+
+
+def create_response_destination(sessionid, storyname, nodename, destname, weight, responseid):
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nugeonline")
+    (userid, groupid)=get_user_info(sessionid, db)
+    
+    try:
+        storyid=get_story_id(db, storyname, groupid)
+        db.query("SELECT nodeid FROM nodes WHERE name='%s' AND storyid=%d" % (nodename, storyid))
+        query=db.use_result()
+        w=query.fetch_row()
+        
+        nodeid=w[0][0]
+        query.fetch_row() # There should be only one such ID.
+        
+        
+        
+        db.close()
+        pass
+    except:
+        pass
+
 
 # Dispatcher code:
 def main(reqmethod, rsrc):
