@@ -17,7 +17,7 @@ login
 Creates a user session given the credentials provided.
 
 Arguments: User ID, password.
-Assumptions: That some form of encryptino is used so that passwords are not sent in plain text over a network.
+Assumptions: That some form of encryption is used so that passwords are not sent in plain text over a network.
              The password could be passed through some fairly simple cypher first to visually obfuscate it.
          
 Returns:

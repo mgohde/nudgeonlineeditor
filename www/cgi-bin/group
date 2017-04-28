@@ -1,1 +1,191 @@
 #!/usr/bin/python 
+
+# group -- A script to change group affiliations and story ownership information.
+# 2017 Dowell Lab
+
+# This uses code snippets and functions previously written for the q project (https://github.com/Kyle-Helmick/q),
+# developed by Michael Gohde for the project.
+
+import os
+import sys
+import MySQLdb
+
+
+dbusername='nudgeweb'
+dbpassword='radpassword'
+
+
+# Generates and prints out an HTTP header for server output.
+def printheader():
+    print("Content-Type: application/json;charset=utf-8")
+    print('')
+
+
+def printerror(errortext):
+    print(errortext)
+    print('')
+
+
+def find_next_gid(db):
+    try:
+        db.query("SELECT MAX(groupid) FROM users");
+        query=db.use_result()
+        
+        w=query.fetch_row()
+        
+        if len(w)==0:
+            raise exception
+        
+        nextgid=w[0][0]
+        query.fetch_row()
+        
+        nextgid=nextgid+1
+        
+        printheader()
+        print('{"groupid":%d"}' % nextgid)
+        
+    except:
+        printerror('Status:comeupwithabetterstatuscode')
+
+
+def get_user_info(sessionid, db):
+    db.query("SELECT userid, groupid FROM sessions WHERE sessionid=%s" % sessionid)
+    query=db.use_result()
+    
+    w=query.fetch_row()
+    query.fetch_row()
+    if len(w)==0:
+        return (-1, -1)
+    else:
+        return (w[0][0], w[0][1])
+
+
+def get_groupid(db, sessionid):
+    (userid, groupid)=get_user_info(sessionid, db)
+    
+    if groupid>0:
+        printheader()
+        print('{"groupid":%d}' % groupid)
+        
+    else:
+        printerror('Status:500')
+        print('Something broke horribly.')
+
+
+def authenticate_user(sessionid, storyline, db):
+    db.query("SELECT userid, groupid FROM sessions WHERE sessionid=%s" % sessionid)
+    query=db.use_result()
+    
+    w=query.fetch_row()
+    if len(w)==0:
+        print "w=0"
+        return False
+    
+    userid=w[0][0]
+    groupid=w[0][1]
+    
+    w=query.fetch_row()
+    db.query("SELECT name FROM stories WHERE authorid=%s OR groupid=%s" % (userid, groupid))
+    query=db.use_result()
+    
+    resultfound=False
+    w=query.fetch_row()
+    while len(w)!=0:
+        if w[0][0]==storyline:
+            resultfound=True
+        
+        w=query.fetch_row()
+        
+    return resultfound
+
+
+def get_story_groupid(db, sessionid, storyline):
+    # First check to see if the user actually has the rights to access the story:
+    if authenticate_user(sessionid, storyline, db):
+        db.query("SELECT groupid FROM stories WHERE name='%s'" % storyline)
+        query=db.use_result()
+        
+        w=query.fetch_row()
+        
+        if len(w)==0:
+            printerror('Status: 500')
+            print("Server error")
+        else:
+            groupid=w[0][0]
+            query.fetch_row()
+            printheader()
+            print('{"groupid":%d}' % groupid)
+    else:
+        printerror('Status:403')
+        print("Access denied.")
+
+
+def set_groupid(db, session, newgid):
+    (curuserid, curgid)=get_user_info(session, db)
+    db.query("UPDATE users SET groupid=%d WHERE userid=%d" % (newgid, curuserid))
+    db.commit()
+    
+    #Mildly redundant but still useful for debugging purposes:
+    db.query("SELECT groupid FROM users WHERE userid=%d" % curuserid)
+    query=db.use_result()
+    
+    r=query.fecth_row()
+    if len(r)==0:
+        printerror('Status:500')
+        print("Something seriously bad just happened...")
+    else:
+        newgid=r[0][0]
+        print('{"groupid":%d}' % newgid)
+
+
+def set_doc_groupid(db, session, storyname, newgid):
+    if authenticate_user(sessionid, storyline, db):
+        (userid, usergid)=get_user_info(session, db)
+        db.query("UPDATE stories SET groupid=%d WHERE userid=%d AND name='%s'" % (newgid, userid, storyname))
+        
+        # TODO: Add read frmo database to that the user can verify that a real change has occurred
+        print('{"groupid":%d}' % newgid)
+    else:
+        printerror('Status:403')
+        print("Access denied.")
+
+
+# Dispatcher code:
+def main(reqmethod, rsrc):
+    sys.stderr=sys.stdout
+    
+    db=MySQLdb.connect("localhost", dbusername, dbpassword, "nudgeonline")
+    
+    # Start dispatching stuff:
+    if rsrc is not None:
+        reqchunks=rsrc.split('/')[1:]
+        
+        if reqmethod=="GET":
+            if len(reqchunks)==1:
+                # TODO: Consider adding some form of authentication by session ID.
+                get_groupid(db, reqchunks[0])
+            elif len(reqchunks)==2:
+                get_story_groupid(db, reqchunks[0], reqchunks[1])
+        
+        elif reqmethod=="PUT":
+            if len(reqchunks)==2:
+                set_groupid(db, sessionid, newgid)
+    else:
+        if reqmethod=="GET":
+            find_next_gid(db)
+            
+        else:
+            printerror('Status:400')
+        
+    db.close()
+
+rmethod="GET"
+rsrc=None
+
+try:
+    rmethod=os.environ['REQUEST_METHOD']
+    rsrc=os.environ['PATH_INFO']
+except:
+    pass
+
+main(rmethod, rsrc)

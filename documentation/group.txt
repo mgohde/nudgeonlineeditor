@@ -1,0 +1,16 @@
+group API description
+=====================
+
+This API exists to allow users to cahnge their group affiliations and story ownership information.
+
+GET functions:
+
+(no arguments or pathspec)
+==========================
+Returns the next available group ID number.
+
+Arguments: none
+Assumptions: that a bare group ID cannot be used maliciously
+
+
+
